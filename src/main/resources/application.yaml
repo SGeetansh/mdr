@@ -1,3 +1,18 @@
 spring:
   application:
     name: mdr
+
+  datasource:
+    url: jdbc:mysql://db:3306/payu?allowPublicKeyRetrieval=true&useSSL=false
+    username: payu
+    password: payu
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+
+  sql:
+    init:
+      mode: never

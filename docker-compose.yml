@@ -11,6 +11,8 @@ services:
     volumes:
       - .:/workspace
     working_dir: /workspace
+    tty: true
+    command: bash
 
   db:
     image: mysql:8
@@ -25,6 +27,8 @@ services:
       - "3306:3306"
     volumes:
       - mysql-data:/var/lib/mysql
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./sql/seed_data.sql:/docker-entrypoint-initdb.d/02-seed.sql
 
 volumes:
   mysql-data:
