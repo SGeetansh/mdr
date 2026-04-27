@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  app:
+    build: .
+    container_name: payu-app
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+
+  db:
+    image: mysql:8
+    container_name: payu-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: payu
+      MYSQL_USER: payu
+      MYSQL_PASSWORD: payu
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+volumes:
+  mysql-data:

@@ -1,0 +1,99 @@
+# =========================
+# Java / Maven / Spring Boot
+# =========================
+target/
+build/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Maven wrapper logs
+.mvn/wrapper/maven-wrapper.properties
+
+# Compiled class files
+*.class
+
+# Logs
+*.log
+logs/
+*.out
+
+# Spring Boot
+*.pid
+*.seed
+*.hprof
+
+# =========================
+# IDEs / Editors
+# =========================
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# VS Code
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# Eclipse / STS
+.project
+.classpath
+.settings/
+.factorypath
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# =========================
+# OS Files
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# Docker
+# =========================
+*.tar
+docker-data/
+mysql-data/
+
+# Env / Secrets
+.env
+.env.*
+!.env.example
+
+# =========================
+# Test / Coverage
+# =========================
+coverage/
+jacoco.exec
+/site/
+
+# =========================
+# Temporary Files
+# =========================
+tmp/
+temp/
+*.swp
+*.swo
+*~
+
+# =========================
+# Generated SQL dumps
+# =========================
+*.sql.gz
+*.dump
+
+# =========================
+# Misc
+# =========================
+*.bak
+*.orig
