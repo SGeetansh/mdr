@@ -16,3 +16,7 @@ spring:
   sql:
     init:
       mode: never
+
+  mdr:
+  dedup:
+    window-hours: 24
