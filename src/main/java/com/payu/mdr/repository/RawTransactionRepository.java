@@ -27,6 +27,7 @@ public interface RawTransactionRepository extends JpaRepository<RawTransaction, 
     @Query(value = """
             SELECT
                 DATE(txn_date)      AS txn_date,
+                HOUR(txn_date)      AS txn_hour,
                 merchant_id,
                 payment_mode,
                 card_type,
@@ -37,10 +38,11 @@ public interface RawTransactionRepository extends JpaRepository<RawTransaction, 
                 SUM(mdr_amount)     AS total_mdr_amount
             FROM raw_transactions
             WHERE is_duplicate = FALSE
-              AND created_at >= :windowStart
-              AND created_at <  :windowEnd
+              AND txn_date >= :windowStart
+              AND txn_date <  :windowEnd
             GROUP BY
                 DATE(txn_date),
+                HOUR(txn_date),
                 merchant_id,
                 payment_mode,
                 card_type,

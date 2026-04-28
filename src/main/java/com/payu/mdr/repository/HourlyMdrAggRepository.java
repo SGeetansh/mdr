@@ -1,6 +1,6 @@
 package com.payu.mdr.repository;
 
-import com.payu.mdr.entity.DailyMdrAgg;
+import com.payu.mdr.entity.HourlyMdrAgg;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -9,44 +9,19 @@ import org.springframework.data.repository.query.Param;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 
-public interface DailyMdrAggRepository extends JpaRepository<DailyMdrAgg, Long> {
+public interface HourlyMdrAggRepository extends JpaRepository<HourlyMdrAgg, Long> {
 
-    // Read single row
-    Optional<DailyMdrAgg>
-    findByTxnDateAndMerchantIdAndPaymentModeAndCardTypeAndCardSchemeAndIbiboCode(
-            LocalDate txnDate,
-            String merchantId,
-            String paymentMode,
-            String cardType,
-            String cardScheme,
-            String ibiboCode
-    );
-
-    // Read all rows for accounting job
-    List<DailyMdrAgg> findByTxnDate(LocalDate txnDate);
-
-    @Query(value = """
-        SELECT
-            txn_date,
-            merchant_id,
-            SUM(txn_count) AS txn_count,
-            SUM(total_txn_amount) AS gross_txn_amount,
-            SUM(total_mdr_amount) AS total_mdr_amount
-        FROM daily_mdr_agg
-        WHERE txn_date = :txnDate
-        GROUP BY txn_date, merchant_id
-        """, nativeQuery = true)
-    List<Object[]> aggregateForDate(@Param("txnDate") LocalDate txnDate);
-
-    // Upsert aggregation row
     @Modifying
     @Transactional
     @Query(value = """
-        INSERT INTO daily_mdr_agg (
+        INSERT INTO hourly_mdr_agg (
+            window_start,
+            window_end,
             txn_date,
+            txn_hour,
             merchant_id,
             payment_mode,
             card_type,
@@ -57,7 +32,10 @@ public interface DailyMdrAggRepository extends JpaRepository<DailyMdrAgg, Long> 
             total_mdr_amount
         )
         VALUES (
+            :windowStart,
+            :windowEnd,
             :txnDate,
+            :txnHour,
             :merchantId,
             COALESCE(:paymentMode, ''),
             COALESCE(:cardType, ''),
@@ -68,13 +46,17 @@ public interface DailyMdrAggRepository extends JpaRepository<DailyMdrAgg, Long> 
             :totalMdrAmount
         )
         ON DUPLICATE KEY UPDATE
+            window_end = VALUES(window_end),
             txn_count = VALUES(txn_count),
             total_txn_amount = VALUES(total_txn_amount),
             total_mdr_amount = VALUES(total_mdr_amount),
             updated_at = CURRENT_TIMESTAMP
         """, nativeQuery = true)
-    void upsertAggregation(
+    void upsertHourlyAggregation(
+            @Param("windowStart") LocalDateTime windowStart,
+            @Param("windowEnd") LocalDateTime windowEnd,
             @Param("txnDate") LocalDate txnDate,
+            @Param("txnHour") int txnHour,
             @Param("merchantId") String merchantId,
             @Param("paymentMode") String paymentMode,
             @Param("cardType") String cardType,
@@ -84,4 +66,27 @@ public interface DailyMdrAggRepository extends JpaRepository<DailyMdrAgg, Long> 
             @Param("totalTxnAmount") BigDecimal totalTxnAmount,
             @Param("totalMdrAmount") BigDecimal totalMdrAmount
     );
+
+    @Query(value = """
+        SELECT
+            txn_date,
+            merchant_id,
+            payment_mode,
+            card_type,
+            card_scheme,
+            ibibo_code,
+            SUM(txn_count) AS txn_count,
+            SUM(total_txn_amount) AS total_txn_amount,
+            SUM(total_mdr_amount) AS total_mdr_amount
+        FROM hourly_mdr_agg
+        WHERE txn_date = :txnDate
+        GROUP BY
+            txn_date,
+            merchant_id,
+            payment_mode,
+            card_type,
+            card_scheme,
+            ibibo_code
+        """, nativeQuery = true)
+    List<Object[]> aggregateForDate(@Param("txnDate") LocalDate txnDate);
 }

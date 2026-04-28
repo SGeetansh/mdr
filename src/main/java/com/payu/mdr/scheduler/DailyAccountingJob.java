@@ -2,6 +2,7 @@ package com.payu.mdr.scheduler;
 
 import com.payu.mdr.repository.DailyAccountingRepository;
 import com.payu.mdr.repository.DailyMdrAggRepository;
+import com.payu.mdr.repository.HourlyMdrAggRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -18,6 +19,7 @@ public class DailyAccountingJob {
 
     private final DailyMdrAggRepository dailyMdrAggRepository;
     private final DailyAccountingRepository dailyAccountingRepository;
+    private final HourlyMdrAggRepository hourlyMdrAggRepository;
 
     /**
      * Runs once a day at 01:00 AM.
@@ -45,7 +47,31 @@ public class DailyAccountingJob {
         log.info("DailyAccountingJob starting — rolling up date [{}]", yesterday);
 
         try {
-            // Step 1 — aggregate daily_mdr_agg rows for yesterday.
+            // Step 1 — refresh daily_mdr_agg from hourly_mdr_agg for yesterday.
+            //          This keeps hourly reruns idempotent and avoids overwriting
+            //          daily totals with only one hour's numbers.
+            var dailyRows = hourlyMdrAggRepository.aggregateForDate(yesterday);
+
+            int dailyUpsertCount = 0;
+            for (Object[] row : dailyRows) {
+                dailyMdrAggRepository.upsertAggregation(
+                        /* txnDate          */ ((java.sql.Date) row[0]).toLocalDate(),
+                        /* merchantId       */ (String) row[1],
+                        /* paymentMode      */ (String) row[2],
+                        /* cardType         */ (String) row[3],
+                        /* cardScheme       */ (String) row[4],
+                        /* ibiboCode        */ (String) row[5],
+                        /* txnCount         */ ((Number) row[6]).longValue(),
+                        /* totalTxnAmount   */ (BigDecimal) row[7],
+                        /* totalMdrAmount   */ (BigDecimal) row[8]
+                );
+                dailyUpsertCount++;
+            }
+
+            log.info("DailyAccountingJob — refreshed {} daily MDR group(s) for [{}]",
+                    dailyUpsertCount, yesterday);
+
+            // Step 2 — aggregate daily_mdr_agg rows for yesterday.
             //          Groups by merchant_id, summing across all payment dimensions
             //          (payment_mode, card_type, card_scheme, ibibo_code).
             //          Returns List<Object[]> — see DailyMdrAggRepository for projection.
@@ -58,7 +84,7 @@ public class DailyAccountingJob {
 
             int upsertCount = 0;
 
-            // Step 2 — upsert each merchant's daily total into daily_accounting.
+            // Step 3 — upsert each merchant's daily total into daily_accounting.
             //          Uses ON DUPLICATE KEY UPDATE keyed on (txn_date, merchant_id).
             //          Running the job twice for the same date is safe — totals are
             //          replaced, not accumulated.

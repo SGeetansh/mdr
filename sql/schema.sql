@@ -1,5 +1,6 @@
 DROP TABLE IF EXISTS daily_accounting;
 DROP TABLE IF EXISTS daily_mdr_agg;
+DROP TABLE IF EXISTS hourly_mdr_agg;
 DROP TABLE IF EXISTS raw_transactions;
 DROP TABLE IF EXISTS mdr_pricing_rules;
 
@@ -88,7 +89,46 @@ CREATE TABLE raw_transactions (
 );
 
 -- =====================================================
--- 3. Daily MDR Aggregation
+-- 3. Hourly MDR Aggregation
+-- =====================================================
+CREATE TABLE hourly_mdr_agg (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+    window_start TIMESTAMP(3) NOT NULL,
+    window_end TIMESTAMP(3) NOT NULL,
+
+    txn_date DATE NOT NULL,
+    txn_hour INT NOT NULL,
+    merchant_id VARCHAR(50) NOT NULL,
+
+    payment_mode VARCHAR(20),
+    card_type VARCHAR(20),
+    card_scheme VARCHAR(20),
+    ibibo_code VARCHAR(30),
+
+    txn_count BIGINT NOT NULL DEFAULT 0,
+    total_txn_amount DECIMAL(18,2) NOT NULL DEFAULT 0.00,
+    total_mdr_amount DECIMAL(18,2) NOT NULL DEFAULT 0.00,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
+    UNIQUE KEY uq_hourly_rollup (
+        window_start,
+        merchant_id,
+        payment_mode,
+        card_type,
+        card_scheme,
+        ibibo_code
+    ),
+
+    INDEX idx_hourly_date_merchant (txn_date, merchant_id),
+    INDEX idx_hourly_window (window_start, window_end)
+);
+
+-- =====================================================
+-- 4. Daily MDR Aggregation
 -- =====================================================
 CREATE TABLE daily_mdr_agg (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -122,7 +162,7 @@ CREATE TABLE daily_mdr_agg (
 );
 
 -- =====================================================
--- 4. Daily Accounting
+-- 5. Daily Accounting
 -- =====================================================
 CREATE TABLE daily_accounting (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,

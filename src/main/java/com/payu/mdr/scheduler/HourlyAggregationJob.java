@@ -1,6 +1,6 @@
 package com.payu.mdr.scheduler;
 
-import com.payu.mdr.repository.DailyMdrAggRepository;
+import com.payu.mdr.repository.HourlyMdrAggRepository;
 import com.payu.mdr.repository.RawTransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 public class HourlyAggregationJob {
 
     private final RawTransactionRepository rawTransactionRepository;
-    private final DailyMdrAggRepository dailyMdrAggRepository;
+    private final HourlyMdrAggRepository hourlyMdrAggRepository;
 
     /**
      * Runs at the top of every hour (e.g., 01:00, 02:00 ...).
@@ -66,33 +66,37 @@ public class HourlyAggregationJob {
 
             int upsertCount = 0;
 
-            // Step 2 — upsert each aggregation group into daily_mdr_agg.
+            // Step 2 — upsert each aggregation group into hourly_mdr_agg.
             //          Uses MySQL ON DUPLICATE KEY UPDATE keyed on
-            //          (txn_date, merchant_id, payment_mode, card_type, card_scheme, ibibo_code).
+            //          (window_start, merchant_id, payment_mode, card_type, card_scheme, ibibo_code).
             //          Running the job twice for the same hour is safe — amounts are
             //          replaced, not double-counted (see repository for UPDATE clause).
             for (Object[] row : aggregations) {
                 // Projection order matches the SELECT in aggregateForHourlyWindow:
                 // [0] txn_date      (java.sql.Date — cast to LocalDate via .toLocalDate())
-                // [1] merchant_id   (String)
-                // [2] payment_mode  (String)
-                // [3] card_type     (String, nullable)
-                // [4] card_scheme   (String, nullable)
-                // [5] ibibo_code    (String, nullable)
-                // [6] txn_count     (Long)
-                // [7] total_txn_amount (BigDecimal)
-                // [8] total_mdr_amount (BigDecimal)
+                // [1] txn_hour      (Number)
+                // [2] merchant_id   (String)
+                // [3] payment_mode  (String)
+                // [4] card_type     (String, nullable)
+                // [5] card_scheme   (String, nullable)
+                // [6] ibibo_code    (String, nullable)
+                // [7] txn_count     (Long)
+                // [8] total_txn_amount (BigDecimal)
+                // [9] total_mdr_amount (BigDecimal)
 
-                dailyMdrAggRepository.upsertAggregation(
+                hourlyMdrAggRepository.upsertHourlyAggregation(
+                        /* windowStart      */ windowStart,
+                        /* windowEnd        */ windowEnd,
                         /* txnDate          */ ((java.sql.Date) row[0]).toLocalDate(),
-                        /* merchantId       */ (String) row[1],
-                        /* paymentMode      */ (String) row[2],
-                        /* cardType         */ (String) row[3],
-                        /* cardScheme       */ (String) row[4],
-                        /* ibiboCode        */ (String) row[5],
-                        /* txnCount         */ ((Number) row[6]).longValue(),
-                        /* totalTxnAmount   */ (java.math.BigDecimal) row[7],
-                        /* totalMdrAmount   */ (java.math.BigDecimal) row[8]
+                        /* txnHour          */ ((Number) row[1]).intValue(),
+                        /* merchantId       */ (String) row[2],
+                        /* paymentMode      */ (String) row[3],
+                        /* cardType         */ (String) row[4],
+                        /* cardScheme       */ (String) row[5],
+                        /* ibiboCode        */ (String) row[6],
+                        /* txnCount         */ ((Number) row[7]).longValue(),
+                        /* totalTxnAmount   */ (java.math.BigDecimal) row[8],
+                        /* totalMdrAmount   */ (java.math.BigDecimal) row[9]
                 );
                 upsertCount++;
             }

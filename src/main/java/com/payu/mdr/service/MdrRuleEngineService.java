@@ -30,8 +30,14 @@ public class MdrRuleEngineService {
      * no rule exists at all.
      */
     public RuleResult applyRule(RawTransaction txn) {
-        List<MdrPricingRule> activeRules = ruleRepository.findByIsActiveTrue();
+        return applyRule(txn, loadActiveRules());
+    }
 
+    public List<MdrPricingRule> loadActiveRules() {
+        return ruleRepository.findByIsActiveTrue();
+    }
+
+    public RuleResult applyRule(RawTransaction txn, List<MdrPricingRule> activeRules) {
         MdrPricingRule bestRule = findBestRule(activeRules, txn);
 
         if (bestRule == null) {

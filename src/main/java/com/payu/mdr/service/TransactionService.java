@@ -2,6 +2,7 @@ package com.payu.mdr.service;
 
 import com.payu.mdr.dto.BatchIngestionResponse;
 import com.payu.mdr.dto.TransactionRequest;
+import com.payu.mdr.entity.MdrPricingRule;
 import com.payu.mdr.entity.RawTransaction;
 import com.payu.mdr.repository.RawTransactionRepository;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +55,7 @@ public class TransactionService {
         int duplicateCount = 0;
         int pricedCount = 0;
         List<RawTransaction> toSave = new ArrayList<>();
+        List<MdrPricingRule> activeRules = mdrRuleEngineService.loadActiveRules();
 
         for (TransactionRequest req : requests) {
 
@@ -89,7 +91,7 @@ public class TransactionService {
                 txn.setMdrAmount(BigDecimal.ZERO);
                 duplicateCount++;
             } else {
-                MdrRuleEngineService.RuleResult ruleResult = mdrRuleEngineService.applyRule(txn);
+                MdrRuleEngineService.RuleResult ruleResult = mdrRuleEngineService.applyRule(txn, activeRules);
                 txn.setMdrAmount(ruleResult.mdrAmount());
                 txn.setRuleId(ruleResult.ruleId());
                 pricedCount++;
