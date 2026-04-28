@@ -13,6 +13,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.math.BigDecimal;
+import java.util.HashSet;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -29,7 +32,24 @@ public class TransactionService {
 
     @Transactional
     public BatchIngestionResponse processBatch(List<TransactionRequest> requests) {
+        
+        if (requests.isEmpty()) {
+            return BatchIngestionResponse.builder()
+                    .totalReceived(0)
+                    .duplicatesFound(0)
+                    .successfullyPriced(0)
+                    .batchId(null)
+                    .message("Batch processed successfully")
+                    .build();
+        }
+
         log.info("Processing batch of {} transactions", requests.size());
+
+        // ── Idempotency: skip any txnId already in the DB ─────────────────────
+        List<String> incomingIds = requests.stream()
+                .map(TransactionRequest::getTxnId).toList();
+        Set<String> existingIds = new HashSet<>(
+                rawTransactionRepository.findAllTxnIdsByTxnIdIn(incomingIds));
 
         int duplicateCount = 0;
         int pricedCount = 0;
@@ -37,32 +57,48 @@ public class TransactionService {
 
         for (TransactionRequest req : requests) {
 
-            // Step 1 — map request to entity
+            // Skip already-persisted txnIds (idempotent resend)
+            if (existingIds.contains(req.getTxnId())) {
+                log.info("Idempotent skip: txnId={} already processed", req.getTxnId());
+                continue;
+            }
+
             RawTransaction txn = mapToEntity(req);
 
-            // Step 2 — dedup check
-            DeduplicationService.DedupResult dedupResult = deduplicationService.check(txn);
+            // ── Dedup check against already-saved rows in THIS batch ──────────
+            // We check toSave list first so same-batch duplicates are caught
+            // without needing a DB round-trip for rows not yet committed.
+            boolean inBatchDuplicate = toSave.stream()
+                    .filter(t -> !t.getIsDuplicate())
+                    .anyMatch(t -> t.getDedupKeyHash() != null &&
+                            t.getDedupKeyHash().equals(
+                                    deduplicationService.computeHash(txn)));
+
+            DeduplicationService.DedupResult dedupResult;
+            if (inBatchDuplicate) {
+                dedupResult = new DeduplicationService.DedupResult(
+                        deduplicationService.computeHash(txn), true);
+            } else {
+                dedupResult = deduplicationService.check(txn);
+            }
+
             txn.setDedupKeyHash(dedupResult.hash());
             txn.setIsDuplicate(dedupResult.isDuplicate());
 
             if (dedupResult.isDuplicate()) {
+                txn.setMdrAmount(BigDecimal.ZERO);
                 duplicateCount++;
-                log.debug("Duplicate txn skipped for pricing: txnId={}", txn.getTxnId());
             } else {
-                // Step 3 — apply MDR rule (only for non-duplicates)
                 MdrRuleEngineService.RuleResult ruleResult = mdrRuleEngineService.applyRule(txn);
                 txn.setMdrAmount(ruleResult.mdrAmount());
                 txn.setRuleId(ruleResult.ruleId());
                 pricedCount++;
             }
 
-            // Step 4 — set trace key (always, even for duplicates)
             txn.setTraceKey(buildTraceKey(txn));
-
             toSave.add(txn);
         }
 
-        // Step 5 — bulk save everything in one DB round trip
         rawTransactionRepository.saveAll(toSave);
 
         log.info("Batch complete: total={} duplicates={} priced={}",
@@ -76,7 +112,6 @@ public class TransactionService {
                 .message("Batch processed successfully")
                 .build();
     }
-
     // ─────────────────────────────────────────────
     // PRIVATE HELPERS
     // ─────────────────────────────────────────────
